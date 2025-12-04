@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Dashboard - Energy Management System</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">Energy Management System</div>
+        <div class="user-info">
+            <span id="welcomeMsg">Welcome</span>
+            <button onclick="auth.logout()" class="btn btn-danger">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="section-header">
+            <h2>My Devices</h2>
+        </div>
+        <div class="table-container">
+            <table id="myDevicesTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Max Consumption</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="consumptionModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Device Consumption</h2>
+            <div class="consumption-controls">
+                <label for="consumptionDate">Select Date:</label>
+                <input type="date" id="consumptionDate">
+            </div>
+            <div class="chart-container">
+                <canvas id="consumptionChart"></canvas>
+            </div>
+            <div class="current-consumption">
+                <h3>Current Consumption: <span id="currentConsumptionValue">-</span> kWh</h3>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/consumption.js"></script>
+    <script src="js/client.js"></script>
+</body>
+
+</html>

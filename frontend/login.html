@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Energy Management System</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+    <div class="auth-container">
+        <div class="auth-box">
+            <h2>Login</h2>
+            <div id="alert" class="alert"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+            </form>
+            <a href="register.html" class="auth-link">Don't have an account? Register</a>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        // Check if already logged in
+        if (auth.isAuthenticated()) {
+            const role = auth.getUserRole();
+            if (role === 'ROLE_ADMIN') {
+                window.location.href = 'admin-dashboard.html';
+            } else {
+                window.location.href = 'client-dashboard.html';
+            }
+        }
+
+        // Check for registration success
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('registered') === 'true') {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-success';
+            alert.textContent = 'Registration successful! Please login.';
+            alert.style.display = 'block';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = e.target.username.value;
+            const password = e.target.password.value;
+            const alert = document.getElementById('alert');
+
+            try {
+                await auth.login(username, password);
+            } catch (error) {
+                alert.className = 'alert alert-error';
+                alert.textContent = 'Invalid username or password';
+                alert.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+
+</html>

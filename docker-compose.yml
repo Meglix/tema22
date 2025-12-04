@@ -1,0 +1,206 @@
+services:
+  traefik:
+    image: traefik:v3
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - //var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app-network
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+
+
+  auth-service:
+    container_name: auth-service
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    volumes:
+      - ./auth:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 4000:8080
+    depends_on:
+      - credential_db
+      - rabbitmq
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth.entrypoints=web"
+      - "traefik.http.middlewares.auth-strip.stripprefix.prefixes=/api"
+      - "traefik.http.routers.auth.middlewares=auth-strip"
+  
+  user-service:
+    container_name: user-service
+    build:
+      context: ./user
+      dockerfile: Dockerfile
+    volumes:
+      - ./user:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 2000:8080
+    depends_on:
+      - user_db
+      - rabbitmq
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user.rule=PathPrefix(`/api/users`)"
+      - "traefik.http.routers.user.entrypoints=web"
+      - "traefik.http.middlewares.user-rewrite.replacepathregex.regex=^/api/users(.*)"
+      - "traefik.http.middlewares.user-rewrite.replacepathregex.replacement=/people$$1"
+      - "traefik.http.routers.user.middlewares=user-rewrite"
+
+  device-service:
+    container_name: device-service
+    build:
+      context: ./device
+      dockerfile: Dockerfile
+    volumes:
+      - ./device:/app
+      - maven_repo:/root/.m2
+    ports:
+      - 3000:8080
+    depends_on:
+      - device_db
+      - rabbitmq
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.device.rule=PathPrefix(`/api/devices`)"
+      - "traefik.http.routers.device.entrypoints=web"
+      - "traefik.http.middlewares.device-strip.stripprefix.prefixes=/api"
+      - "traefik.http.routers.device.middlewares=device-strip"
+
+  user_db:
+    container_name: user_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - user_data:/var/lib/postgresql
+    ports:
+      - 1000:5432
+    networks:
+      - app-network
+
+  device_db:
+    container_name: device_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - device_data:/var/lib/postgresql
+    ports:
+      - 1001:5432
+    networks:
+      - app-network
+
+  credential_db:
+    container_name: credential_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - credential_db:/var/lib/postgresql
+    ports:
+      - 1002:5432
+    networks:
+      - app-network
+
+  monitoring-service:
+    container_name: monitoring-service
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile
+    depends_on:
+      - monitoring_db
+      - rabbitmq
+    environment:
+      - DB_HOST=monitoring_db
+      - DB_NAME=example-db
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - RABBITMQ_HOST=rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitoring.rule=PathPrefix(`/api/monitoring`)"
+      - "traefik.http.routers.monitoring.entrypoints=web"
+      - "traefik.http.middlewares.monitoring-strip.stripprefix.prefixes=/api/monitoring"
+      - "traefik.http.routers.monitoring.middlewares=monitoring-strip"
+      - "traefik.http.services.monitoring.loadbalancer.server.port=8080"
+      # WebSocket specific router
+      - "traefik.http.routers.monitoring-ws.rule=PathPrefix(`/api/monitoring/ws`)"
+      - "traefik.http.routers.monitoring-ws.entrypoints=web"
+      - "traefik.http.routers.monitoring-ws.middlewares=monitoring-strip"
+    networks:
+      - app-network
+
+  monitoring_db:
+    container_name: monitoring_db
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: example-db
+    volumes:
+      - monitoring_db:/var/lib/postgresql
+    ports:
+      - 1003:5432
+    networks:
+      - app-network
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3.12-management
+    environment:
+      RABBITMQ_DEFAULT_USER: kalo
+      RABBITMQ_DEFAULT_PASS: kalo
+    volumes:
+      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  user_data:
+  maven_repo:
+  device_data:
+  credential_db:
+  monitoring_db:
+  rabbitmq-lib:
+  rabbitmq-log:

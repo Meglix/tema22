@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Management System</title>
+    <script src="js/auth.js"></script>
+    <script>
+        // Redirect logic
+        if (auth.isAuthenticated()) {
+            const role = auth.getUserRole();
+            if (role === 'ROLE_ADMIN') {
+                window.location.href = 'admin-dashboard.html';
+            } else {
+                window.location.href = 'client-dashboard.html';
+            }
+        } else {
+            window.location.href = 'login.html';
+        }
+    </script>
+</head>
+
+<body>
+    <p>Redirecting...</p>
+</body>
+
+</html>
