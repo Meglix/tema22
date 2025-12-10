@@ -9,7 +9,7 @@ import com.example.auth.dtos.PersonDTO;
 import com.example.auth.dtos.RegisterDTO;
 import com.example.auth.services.PersonService;
 import jakarta.validation.Valid;
-import org.apache.coyote.Response;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -34,6 +34,9 @@ public class AuthController {
     PersonService personService;
 
     @Autowired
+    RabbitTemplate rabbitTemplate;
+
+    @Autowired
     JwtEncoder encoder;
 
     @Autowired
@@ -42,6 +45,23 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterDTO registerDTO) {
         UUID id = personService.insert(registerDTO);
+
+        // Create sync DTO
+        // We need to fetch the full person details to send to User Service?
+        // Or does registerDTO have enough? RegisterDTO usually has password, we
+        // shouldn't send that.
+        // But User Service needs name, address, age. RegisterDTO likely has them.
+        // Let's create a generic map or DTO to send.
+        // Assuming RegisterDTO has name, address, age.
+
+        com.example.auth.dtos.PersonSyncDTO syncDTO = new com.example.auth.dtos.PersonSyncDTO(
+                id,
+                registerDTO.getName(),
+                registerDTO.getAddress(),
+                registerDTO.getAge());
+
+        rabbitTemplate.convertAndSend("user-exchange", "user.create", syncDTO);
+
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .path("/{id}")
@@ -55,11 +75,10 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-
     @PostMapping("/token")
     public String token(Authentication authentication) {
         Instant now = Instant.now();
-        long expiry = 10*300L;
+        long expiry = 10 * 300L;
         // @formatter:off
         String scope = authentication.getAuthorities().stream()
               .map(GrantedAuthority::getAuthority)

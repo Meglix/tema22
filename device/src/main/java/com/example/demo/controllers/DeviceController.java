@@ -26,10 +26,13 @@ public class DeviceController {
 
     private final DeviceService deviceService;
     private final JwtService jwtService;
+    private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
-    public DeviceController(DeviceService deviceService, JwtService jwtService) {
+    public DeviceController(DeviceService deviceService, JwtService jwtService,
+            org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate) {
         this.deviceService = deviceService;
         this.jwtService = jwtService;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     private void checkAdminRole(String authHeader) {
@@ -50,9 +53,14 @@ public class DeviceController {
     }
 
     @PostMapping
-    public ResponseEntity<Void> create(@Valid @RequestBody DeviceDetailsDTO device, @RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<Void> create(@Valid @RequestBody DeviceDetailsDTO device,
+            @RequestHeader("Authorization") String authHeader) {
         checkAdminRole(authHeader);
         UUID id = deviceService.insert(device);
+
+        // Publish device create event for synchronization
+        rabbitTemplate.convertAndSend("device-exchange", "device.create", id.toString());
+
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .path("/{id}")
@@ -70,14 +78,18 @@ public class DeviceController {
     public ResponseEntity<Void> deleteDevice(@PathVariable UUID id, @RequestHeader("Authorization") String authHeader) {
         checkAdminRole(authHeader);
         boolean deleted = deviceService.delete(id);
-        if (deleted)
+        if (deleted) {
+            // Publish device delete event for synchronization
+            rabbitTemplate.convertAndSend("device-exchange", "device.delete", id.toString());
             return ResponseEntity.status(204).build();
-        else
+        } else {
             return ResponseEntity.status(404).build();
+        }
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<DeviceDetailsDTO> updateDevice(@Valid @RequestBody DeviceDetailsDTO deviceDetailsDTO, @PathVariable UUID id, @RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<DeviceDetailsDTO> updateDevice(@Valid @RequestBody DeviceDetailsDTO deviceDetailsDTO,
+            @PathVariable UUID id, @RequestHeader("Authorization") String authHeader) {
         checkAdminRole(authHeader);
         DeviceDetailsDTO deviceDTO = deviceService.update(deviceDetailsDTO);
         if (id.equals(deviceDTO.getId())) {
@@ -93,36 +105,39 @@ public class DeviceController {
     }
 
     @PostMapping("/mapping")
-    public ResponseEntity<Void> assignDeviceToUser(@RequestParam UUID userId, @RequestParam UUID deviceId, @RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<Void> assignDeviceToUser(@RequestParam UUID userId, @RequestParam UUID deviceId,
+            @RequestHeader("Authorization") String authHeader) {
         checkAdminRole(authHeader);
         deviceService.assignDeviceToUser(userId, deviceId);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     @DeleteMapping("/mapping")
-    public ResponseEntity<Void> unassignDeviceFromUser(@RequestParam UUID userId, @RequestParam UUID deviceId, @RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<Void> unassignDeviceFromUser(@RequestParam UUID userId, @RequestParam UUID deviceId,
+            @RequestHeader("Authorization") String authHeader) {
         checkAdminRole(authHeader);
         deviceService.unassignDeviceFromUser(userId, deviceId);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<DeviceDTO>> getDevicesForUser(@PathVariable UUID userId){//, @RequestHeader("Authorization") String authHeader) {
-//        checkAdminRole(authHeader);
+    public ResponseEntity<List<DeviceDTO>> getDevicesForUser(@PathVariable UUID userId) {// ,
+                                                                                         // @RequestHeader("Authorization")
+                                                                                         // String authHeader) {
+        // checkAdminRole(authHeader);
         return ResponseEntity.ok(deviceService.findDevicesByUserId(userId));
     }
 
     @GetMapping("/user-mapping/{deviceId}")
-    public ResponseEntity<String> getUserByDevice(@PathVariable UUID deviceId){//, @RequestHeader("Authorization") String authHeader) {
-//        checkAdminRole(authHeader);
+    public ResponseEntity<String> getUserByDevice(@PathVariable UUID deviceId) {// , @RequestHeader("Authorization")
+                                                                                // String authHeader) {
+        // checkAdminRole(authHeader);
         UserDeviceMapping udm = deviceService.findAssignDevice(deviceId);
         try {
             return ResponseEntity.ok().body(udm.getUserId().toString());
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             return ResponseEntity.ok().body("");
         }
     }
-
 
 }

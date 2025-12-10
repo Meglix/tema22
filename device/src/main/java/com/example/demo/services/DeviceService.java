@@ -1,6 +1,5 @@
 package com.example.demo.services;
 
-
 import com.example.demo.dtos.DeviceDTO;
 import com.example.demo.dtos.DeviceDetailsDTO;
 import com.example.demo.dtos.builders.DeviceBuilder;
@@ -9,8 +8,8 @@ import com.example.demo.entities.UserDeviceMapping;
 import com.example.demo.handlers.exceptions.model.ResourceNotFoundException;
 import com.example.demo.repositories.DeviceRepository;
 import com.example.demo.repositories.UserDeviceMappingRepository;
+import com.example.demo.repositories.UserRepository;
 import jakarta.transaction.Transactional;
-import org.apache.catalina.User;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,11 +27,14 @@ public class DeviceService {
     private static final Logger LOGGER = LoggerFactory.getLogger(DeviceService.class);
     private final DeviceRepository deviceRepository;
     private final UserDeviceMappingRepository mappingRepository;
+    private final UserRepository userRepository;
 
     @Autowired
-    public DeviceService(DeviceRepository deviceRepository, UserDeviceMappingRepository mappingRepository) {
+    public DeviceService(DeviceRepository deviceRepository, UserDeviceMappingRepository mappingRepository,
+            UserRepository userRepository) {
         this.deviceRepository = deviceRepository;
         this.mappingRepository = mappingRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -92,6 +94,12 @@ public class DeviceService {
 
     @Transactional
     public void assignDeviceToUser(UUID userId, UUID deviceId) {
+        // Check if user exists in local users table (synchronized from user service)
+        if (!userRepository.existsById(userId)) {
+            LOGGER.error("User with id {} was not found in device service database", userId);
+            throw new ResourceNotFoundException("User with id: " + userId + " not found. User must be created first.");
+        }
+
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> {
                     LOGGER.error("Device with id {} was not found in db", deviceId);
@@ -132,7 +140,7 @@ public class DeviceService {
 
     public @Nullable UserDeviceMapping findAssignDevice(UUID deviceId) {
         Optional<Device> device = deviceRepository.findById(deviceId);
-        if(device.isEmpty())
+        if (device.isEmpty())
             throw new ResourceNotFoundException("Device is not assigned");
 
         return mappingRepository.findByDevice(device.get().getId());

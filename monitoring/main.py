@@ -8,10 +8,12 @@ from typing import List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from database_module import create_table_if_not_exists, insert_measurement, get_hourly_consumption
+from database_module import create_table_if_not_exists, insert_measurement, get_hourly_consumption, insert_device, delete_device
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 QUEUE_NAME = "measurements.queue"
+DEVICE_QUEUE_NAME = "device.create.queue"
+DEVICE_DELETE_QUEUE_NAME = "device.delete.queue"
 
 app = FastAPI()
 
@@ -109,6 +111,68 @@ def rabbitmq_consumer():
     print(' [*] Waiting for messages.')
     channel.start_consuming()
 
+# Device RabbitMQ Consumer
+def device_rabbitmq_consumer():
+    print("Starting Device RabbitMQ Consumer...")
+    connection = None
+    while connection is None:
+        try:
+            creds = pika.PlainCredentials('kalo', 'kalo')
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=creds)
+            )
+        except pika.exceptions.AMQPConnectionError:
+            print("RabbitMQ not ready for device consumer, retrying...")
+            time.sleep(5)
+
+    channel = connection.channel()
+    channel.queue_declare(queue=DEVICE_QUEUE_NAME, durable=True)
+
+    def callback(ch, method, properties, body):
+        print(f" [x] Received device event: {body}")
+        try:
+            # Parse device UUID from message
+            device_id = body.decode('utf-8').strip('"')
+            insert_device(device_id)
+            print(f" [x] Synchronized device {device_id} in monitoring database")
+        except Exception as e:
+            print(f" [!] Error processing device event: {e}")
+
+    channel.basic_consume(queue=DEVICE_QUEUE_NAME, on_message_callback=callback, auto_ack=True)
+    print(' [*] Waiting for device events.')
+    channel.start_consuming()
+
+# Device Delete RabbitMQ Consumer
+def device_delete_rabbitmq_consumer():
+    print("Starting Device Delete RabbitMQ Consumer...")
+    connection = None
+    while connection is None:
+        try:
+            creds = pika.PlainCredentials('kalo', 'kalo')
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=creds)
+            )
+        except pika.exceptions.AMQPConnectionError:
+            print("RabbitMQ not ready for device delete consumer, retrying...")
+            time.sleep(5)
+
+    channel = connection.channel()
+    channel.queue_declare(queue=DEVICE_DELETE_QUEUE_NAME, durable=True)
+
+    def callback(ch, method, properties, body):
+        print(f" [x] Received device delete event: {body}")
+        try:
+            # Parse device UUID from message
+            device_id = body.decode('utf-8').strip('"')
+            delete_device(device_id)
+            print(f" [x] Deleted device {device_id} from monitoring database")
+        except Exception as e:
+            print(f" [!] Error processing device delete event: {e}")
+
+    channel.basic_consume(queue=DEVICE_DELETE_QUEUE_NAME, on_message_callback=callback, auto_ack=True)
+    print(' [*] Waiting for device delete events.')
+    channel.start_consuming()
+
 # Global loop variable
 loop = None
 
@@ -123,6 +187,14 @@ async def startup_event():
     # Start RabbitMQ consumer in a separate thread
     t = threading.Thread(target=rabbitmq_consumer, daemon=True)
     t.start()
+    
+    # Start Device RabbitMQ consumer in a separate thread
+    t2 = threading.Thread(target=device_rabbitmq_consumer, daemon=True)
+    t2.start()
+    
+    # Start Device Delete RabbitMQ consumer in a separate thread
+    t3 = threading.Thread(target=device_delete_rabbitmq_consumer, daemon=True)
+    t3.start()
 
 @app.get("/")
 async def health_check():

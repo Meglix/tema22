@@ -23,13 +23,7 @@ public class RabbitMQConfig {
 
     @Bean
     public MessageConverter jsonMessageConverter() {
-        Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
-        converter.setJavaTypeMapper(new DefaultJackson2JavaTypeMapper() {
-            @Override
-            public void fromJavaType(JavaType javaType, MessageProperties properties) {
-            }
-        });
-        return converter;
+        return new Jackson2JsonMessageConverter();
     }
 
     @Bean

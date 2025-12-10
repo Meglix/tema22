@@ -23,11 +23,10 @@ public class UserConsumer {
         LOGGER.info("Received create user event: {}", personSyncDTO);
         try {
             PersonDetailsDTO personDetailsDTO = new PersonDetailsDTO(
-                personSyncDTO.getId(),
-                personSyncDTO.getName(),
-                personSyncDTO.getAddress(),
-                personSyncDTO.getAge()
-            );
+                    personSyncDTO.getId(),
+                    personSyncDTO.getName(),
+                    personSyncDTO.getAddress(),
+                    personSyncDTO.getAge());
             personService.insert(personDetailsDTO);
         } catch (Exception e) {
             LOGGER.error("Error processing create user event", e);
@@ -35,9 +34,13 @@ public class UserConsumer {
     }
 
     @RabbitListener(queues = "user.delete.user-queue")
-    public void receiveDeleteUser(UUID userId) {
-        LOGGER.info("Received delete user event: {}", userId);
+    public void receiveDeleteUser(String userIdStr) {
+        LOGGER.info("Received delete user event: {}", userIdStr);
         try {
+            // Extract UUID from message (keep only valid UUID characters: a-f, A-F, 0-9,
+            // and -)
+            String cleanUuid = userIdStr.replaceAll("[^a-fA-F0-9\\-]", "");
+            UUID userId = UUID.fromString(cleanUuid);
             personService.delete(userId);
         } catch (Exception e) {
             LOGGER.error("Error processing delete user event", e);

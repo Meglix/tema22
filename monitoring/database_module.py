@@ -44,6 +44,36 @@ def create_table_if_not_exists():
             UNIQUE(device_id, hour)
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS devices (
+            device_id UUID PRIMARY KEY,
+            synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def insert_device(device_id):
+    """Insert device ID when synchronized from device service."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO devices (device_id)
+        VALUES (%s)
+        ON CONFLICT (device_id) DO NOTHING
+    """, (device_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def delete_device(device_id):
+    """Delete device when deleted from device service."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        DELETE FROM devices WHERE device_id = %s
+    """, (device_id,))
     conn.commit()
     cur.close()
     conn.close()
